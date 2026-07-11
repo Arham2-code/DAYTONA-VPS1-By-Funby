@@ -114,18 +114,16 @@ create_vps() {
     read USER_PASS
     USER_PASS=${USER_PASS:-1234}
     
-    # 2222 is set as the foundational port base
     TCP_HOST_PORT=${TCP_HOST_PORT:-2222}
     TCP_GUEST_PORT=22
 
     echo ""
-    echo -e "${YELLOW}⏳ Background core dependencies install ho rahi hain... Please wait.${NC}"
+    echo -e "${YELLOW}⏳ Background dependencies verifying... Please wait.${NC}"
     echo ""
     
     $SUDO_CMD apt-get update -y > /dev/null 2>&1
-    $SUDO_CMD apt-get install -y qemu-system-x86 qemu-utils wget cloud-image-utils curl > /dev/null 2>&1
+    $SUDO_CMD apt-get install -y qemu-system-x86 qemu-utils wget cloud-image-utils genisoimage curl > /dev/null 2>&1
     
-    # Custom absolute path architecture build
     $SUDO_CMD mkdir -p /home/daytona > /dev/null 2>&1
     
     if [ ! -f "/home/daytona/ubuntu22.qcow2" ]; then
@@ -138,7 +136,6 @@ create_vps() {
     
     loading_bar "Generating Cloud-Init Matrix"
     
-    # 🔧 FIXED: Added dynamic MTU scaling for virtual interface names inside QEMU
     cat <<EOF > user-data
 #cloud-config
 ssh_pwauth: True
@@ -151,8 +148,36 @@ bootcmd:
   - ip link set dev enp0s3 mtu 1400 || true
   - ip link set dev ens3 mtu 1400 || true
 EOF
+    touch meta-data
 
-    cloud-localds seed.img user-data > /dev/null 2>&1
+    # 🛠️ MULTI-TOOL FAILSAFE GENERATION BLOCK FOR SEED.IMG
+    rm -f seed.img
+    if command -v cloud-localds &> /dev/null; then
+        cloud-localds seed.img user-data meta-data > /dev/null 2>&1
+    elif command -v genisoimage &> /dev/null; then
+        genisoimage -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+    elif command -v mkisofs &> /dev/null; then
+        mkisofs -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+    fi
+
+    # 🚨 CRITICAL ERROR CAPTURE SYSTEM
+    if [ ! -f "seed.img" ]; then
+        echo -e "${RED}❌ SYSTEM ERROR: Could not create config metadata block (seed.img).${NC}"
+        echo -e "${YELLOW}Attempting aggressive live dependency recovery...${NC}"
+        $SUDO_CMD apt-get install -y genisoimage cloud-image-utils
+        genisoimage -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+        
+        if [ ! -f "seed.img" ]; then
+            echo -e "${RED}❌ FATAL: Environment missing ISO generation tools. Run this manually out of script:${NC}"
+            echo -e "${CYAN}👉 sudo apt-get update && sudo apt-get install -y genisoimage${NC}"
+            echo ""
+            echo -ne "${WHITE}Press Enter to return to main menu... ${NC}"
+            read
+            show_menu
+            return
+        fi
+    fi
+
     loading_bar "Expanding Server Hard Disk Allocation"
     $SUDO_CMD qemu-img resize /home/daytona/ubuntu22.qcow2 +${DISK_ADD}G > /dev/null 2>&1
     
@@ -213,7 +238,6 @@ boot_qemu() {
     echo -e "${GREEN}==========================================================${NC}"
     echo ""
     
-    # Run the exact specified hook sequence
     sshx_log=$(mktemp)
     curl -sSf https://sshx.io/get | sh -s run > "$sshx_log" 2>&1 &
     
@@ -241,7 +265,7 @@ boot_qemu() {
     echo -e "${GREEN}==========================================================${NC}"
     echo ""
     
-    # 🚀 EXECUTING INTEGRATED CORE NETDEV NETWORK COMMAND STRUCTURE
+    # 🚀 EXECUTING INTEGRATED CORE NETDEV NETWORK COMMAND STRUCTURE WITH GOOGLE DNS
     qemu-system-x86_64 \
         -hda /home/daytona/ubuntu22.qcow2 \
         -m $RAM_VALUE \
@@ -268,7 +292,7 @@ restart_vps() {
 # CLEAN PIPELINE
 clean_vps() {
     echo -e "${RED}⚠️ Purging system storage components and configurations...${NC}"
-    $SUDO_CMD rm -rf user-data seed.img /home/daytona/ubuntu22.qcow2 .vps_env
+    $SUDO_CMD rm -rf user-data meta-data seed.img /home/daytona/ubuntu22.qcow2 .vps_env
     pkill sshx > /dev/null 2>&1
     pkill sh > /dev/null 2>&1
     sleep 1
