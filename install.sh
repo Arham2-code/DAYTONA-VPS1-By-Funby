@@ -304,6 +304,8 @@ restart_vps() {
 # CLEAN PIPELINE
 clean_vps() {
     echo -e "${RED}⚠️ Purging system storage components and configurations...${NC}"
+    # Forcefully kill any running QEMU instances first
+    sudo pkill -9 -f qemu-system-x86_64 > /dev/null 2>&1
     $SUDO_CMD rm -rf /home/daytona/user-data /home/daytona/meta-data /home/daytona/seed.img /home/daytona/ubuntu22.qcow2 /home/daytona/.vps_env
     pkill sshx > /dev/null 2>&1
     pkill sh > /dev/null 2>&1
@@ -312,6 +314,5 @@ clean_vps() {
     sleep 2
     show_menu
 }
-
 # EXECUTE TRIGGER
 show_menu
