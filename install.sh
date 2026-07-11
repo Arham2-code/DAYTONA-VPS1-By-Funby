@@ -125,6 +125,7 @@ create_vps() {
     $SUDO_CMD apt-get install -y qemu-system-x86 qemu-utils wget cloud-image-utils genisoimage curl > /dev/null 2>&1
     
     $SUDO_CMD mkdir -p /home/daytona > /dev/null 2>&1
+    $SUDO_CMD chmod 777 /home/daytona > /dev/null 2>&1
     
     if [ ! -f "/home/daytona/ubuntu22.qcow2" ]; then
         echo -e "${YELLOW}📥 Downloading Ubuntu 22.04 Cloud Image to /home/daytona/...${NC}"
@@ -136,7 +137,8 @@ create_vps() {
     
     loading_bar "Generating Cloud-Init Matrix"
     
-    cat <<EOF > user-data
+    # Write directly to absolute path architecture
+    cat <<EOF > /home/daytona/user-data
 #cloud-config
 ssh_pwauth: True
 chpasswd:
@@ -148,30 +150,31 @@ bootcmd:
   - ip link set dev enp0s3 mtu 1400 || true
   - ip link set dev ens3 mtu 1400 || true
 EOF
-    touch meta-data
+    touch /home/daytona/meta-data
 
-    # 🛠️ MULTI-TOOL FAILSAFE GENERATION BLOCK FOR SEED.IMG
-    rm -f seed.img
+    # 🛠️ ABSOLUTE PATH FAILSAFE ISO BLOCK GENERATION
+    $SUDO_CMD rm -f /home/daytona/seed.img
     if command -v cloud-localds &> /dev/null; then
-        cloud-localds seed.img user-data meta-data > /dev/null 2>&1
+        $SUDO_CMD cloud-localds /home/daytona/seed.img /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
     elif command -v genisoimage &> /dev/null; then
-        genisoimage -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+        $SUDO_CMD genisoimage -output /home/daytona/seed.img -volid cidata -joliet -rock /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
     elif command -v mkisofs &> /dev/null; then
-        mkisofs -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+        $SUDO_CMD mkisofs -output /home/daytona/seed.img -volid cidata -joliet -rock /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
     fi
+    
+    $SUDO_CMD chmod 666 /home/daytona/seed.img > /dev/null 2>&1
 
-    # 🚨 CRITICAL ERROR CAPTURE SYSTEM
-    if [ ! -f "seed.img" ]; then
-        echo -e "${RED}❌ SYSTEM ERROR: Could not create config metadata block (seed.img).${NC}"
-        echo -e "${YELLOW}Attempting aggressive live dependency recovery...${NC}"
-        $SUDO_CMD apt-get install -y genisoimage cloud-image-utils
-        genisoimage -output seed.img -volid cidata -joliet -rock user-data meta-data > /dev/null 2>&1
+    # 🚨 CRITICAL ERROR DIAGNOSTIC CHECK
+    if [ ! -f "/home/daytona/seed.img" ]; then
+        echo -e "${RED}❌ SYSTEM ERROR: Absolute config build failed (/home/daytona/seed.img missing).${NC}"
+        echo -e "${YELLOW}Attempting forced backup compiling...${NC}"
+        $SUDO_CMD apt-get install -y genisoimage > /dev/null 2>&1
+        $SUDO_CMD genisoimage -output /home/daytona/seed.img -volid cidata -joliet -rock /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
+        $SUDO_CMD chmod 666 /home/daytona/seed.img > /dev/null 2>&1
         
-        if [ ! -f "seed.img" ]; then
-            echo -e "${RED}❌ FATAL: Environment missing ISO generation tools. Run this manually out of script:${NC}"
-            echo -e "${CYAN}👉 sudo apt-get update && sudo apt-get install -y genisoimage${NC}"
-            echo ""
-            echo -ne "${WHITE}Press Enter to return to main menu... ${NC}"
+        if [ ! -f "/home/daytona/seed.img" ]; then
+            echo -e "${RED}❌ FATAL: ISO compiler engine inaccessible inside your sandbox.${NC}"
+            echo -ne "${WHITE}Press Enter to return to menu... ${NC}"
             read
             show_menu
             return
@@ -192,8 +195,8 @@ configure_tcp() {
     echo -e "${WHITE}🔄⚙️  MANAGE CUSTOM TCP PORT FORWARDING RULES ${NC}"
     echo -e "${YELLOW}==========================================================${NC}"
     echo ""
-    if [ -f ".vps_env" ]; then
-        source .vps_env
+    if [ -f "/home/daytona/.vps_env" ]; then
+        source /home/daytona/.vps_env
     fi
     echo -e "Current Target Host Port  : ${CYAN}${TCP_HOST_PORT:-2222}${NC}"
     echo -e "Current Guest VM Port     : ${CYAN}${TCP_GUEST_PORT:-22}${NC}"
@@ -214,18 +217,19 @@ configure_tcp() {
 }
 
 save_env() {
-    echo "RAM_GB=${RAM_GB:-32}" > .vps_env
-    echo "CPU_CORES=${CPU_CORES:-4}" >> .vps_env
-    echo "USER_NAME=${USER_NAME:-ubuntu}" >> .vps_env
-    echo "USER_PASS=${USER_PASS:-1234}" >> .vps_env
-    echo "TCP_HOST_PORT=${TCP_HOST_PORT:-2222}" >> .vps_env
-    echo "TCP_GUEST_PORT=${TCP_GUEST_PORT:-22}" >> .vps_env
+    echo "RAM_GB=${RAM_GB:-32}" > /home/daytona/.vps_env
+    echo "CPU_CORES=${CPU_CORES:-4}" >> /home/daytona/.vps_env
+    echo "USER_NAME=${USER_NAME:-ubuntu}" >> /home/daytona/.vps_env
+    echo "USER_PASS=${USER_PASS:-1234}" >> /home/daytona/.vps_env
+    echo "TCP_HOST_PORT=${TCP_HOST_PORT:-2222}" >> /home/daytona/.vps_env
+    echo "TCP_GUEST_PORT=${TCP_GUEST_PORT:-22}" >> /home/daytona/.vps_env
+    chmod 666 /home/daytona/.vps_env > /dev/null 2>&1
 }
 
 # STEP 3: POPOUT LINK AND RUN THE MASTER EXECUTION COMMAND
 boot_qemu() {
-    if [ -f ".vps_env" ]; then
-        source .vps_env
+    if [ -f "/home/daytona/.vps_env" ]; then
+        source /home/daytona/.vps_env
     fi
 
     TCP_HOST_PORT=${TCP_HOST_PORT:-2222}
@@ -265,12 +269,12 @@ boot_qemu() {
     echo -e "${GREEN}==========================================================${NC}"
     echo ""
     
-    # 🚀 EXECUTING INTEGRATED CORE NETDEV NETWORK COMMAND STRUCTURE WITH GOOGLE DNS
+    # 🚀 EXECUTING RE-CONFIGURED STRICT ABSOLUTE PATH ARCHITECTURE WITH GOOGLE DNS
     qemu-system-x86_64 \
         -hda /home/daytona/ubuntu22.qcow2 \
         -m $RAM_VALUE \
         -smp ${CPU_CORES:-4} \
-        -drive file=seed.img,format=raw \
+        -drive file=/home/daytona/seed.img,format=raw \
         -nographic \
         -netdev user,id=net0,dns=8.8.8.8,hostfwd=tcp::${TCP_HOST_PORT}-:${TCP_GUEST_PORT} \
         -device e1000,netdev=net0
@@ -278,7 +282,7 @@ boot_qemu() {
 
 # RESTART PIPELINE
 restart_vps() {
-    if [ -f "/home/daytona/ubuntu22.qcow2" ] && [ -f "seed.img" ]; then
+    if [ -f "/home/daytona/ubuntu22.qcow2" ] && [ -f "/home/daytona/seed.img" ]; then
         echo -e "${GREEN}🔄 Restarting existing server architecture...${NC}"
         sleep 1
         boot_qemu
@@ -292,7 +296,7 @@ restart_vps() {
 # CLEAN PIPELINE
 clean_vps() {
     echo -e "${RED}⚠️ Purging system storage components and configurations...${NC}"
-    $SUDO_CMD rm -rf user-data meta-data seed.img /home/daytona/ubuntu22.qcow2 .vps_env
+    $SUDO_CMD rm -rf /home/daytona/user-data /home/daytona/meta-data /home/daytona/seed.img /home/daytona/ubuntu22.qcow2 /home/daytona/.vps_env
     pkill sshx > /dev/null 2>&1
     pkill sh > /dev/null 2>&1
     sleep 1
