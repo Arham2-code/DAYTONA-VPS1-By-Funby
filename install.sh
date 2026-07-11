@@ -137,19 +137,34 @@ create_vps() {
     
     loading_bar "Generating Cloud-Init Matrix"
     
-    # Write configuration blocks inside absolute path structures
+    # Write persistent network layout fixes directly into cloud-config
     cat <<EOF > /home/daytona/user-data
 #cloud-config
 ssh_pwauth: True
 chpasswd:
   list: |
-    ${USER_NAME}:${USER_PASS}
+    \${USER_NAME}:\${USER_PASS}
   expire: False
+write_files:
+  - path: /etc/systemd/system/vps-net-fix.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=VPS Persistent Network Fix Matrix
+      After=network.target network-online.target systemd-resolved.service
+      Before=rc-local.service
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c "sysctl -w net.ipv6.conf.all.disable_ipv6=1; sysctl -w net.ipv6.conf.default.disable_ipv6=1; sysctl -w net.ipv6.conf.lo.disable_ipv6=1; ip link set dev eth0 mtu 1400 || true; ip link set dev enp0s3 mtu 1400 || true; ip link set dev ens3 mtu 1400 || true; systemctl stop systemd-resolved || true; systemctl disable systemd-resolved || true; rm -f /etc/resolv.conf; echo 'nameserver 8.8.8.8' > /etc/resolv.conf; echo 'nameserver 8.8.4.4' >> /etc/resolv.conf"
+      RemainAfterExit=yes
+      
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
-  - ip link set dev eth0 mtu 1400 || true
-  - ip link set dev enp0s3 mtu 1400 || true
-  - ip link set dev ens3 mtu 1400 || true
-  - echo "nameserver 8.8.8.8" > /etc/resolv.conf
+  - systemctl daemon-reload
+  - systemctl enable vps-net-fix.service
+  - systemctl start vps-net-fix.service
 EOF
     touch /home/daytona/meta-data
 
@@ -262,14 +277,14 @@ boot_qemu() {
     echo -e "${GREEN}==========================================================${NC}"
     echo ""
     
-    # 🚀 EXECUTING STRUCTURAL VIRTUAL ENVIRONMENT WITH INTEGRATED INTERNET OVERRIDES
+    # EXECUTING ENVIRONMENT
     qemu-system-x86_64 \
         -hda /home/daytona/ubuntu22.qcow2 \
         -m $RAM_VALUE \
         -smp ${CPU_CORES:-4} \
         -drive file=/home/daytona/seed.img,format=raw \
         -nographic \
-        -netdev user,id=net0,dns=8.8.8.8,hostfwd=tcp::${TCP_HOST_PORT}-:${TCP_GUEST_PORT} \
+        -netdev user,id=net0,hostfwd=tcp::${TCP_HOST_PORT}-:${TCP_GUEST_PORT} \
         -device e1000,netdev=net0
 }
 
