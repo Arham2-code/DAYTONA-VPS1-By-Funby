@@ -145,7 +145,7 @@ chpasswd:
   list: |
     ${USER_NAME}:${USER_PASS}
   expire: False
-bootcmd:
+runcmd:
   - ip link set dev eth0 mtu 1400 || true
   - ip link set dev enp0s3 mtu 1400 || true
   - ip link set dev ens3 mtu 1400 || true
