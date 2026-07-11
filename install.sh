@@ -137,13 +137,14 @@ create_vps() {
     
     loading_bar "Generating Cloud-Init Matrix"
     
-    # Write persistent network layout fixes directly into cloud-config
+    # Write persistent network layout fixes directly into cloud-config (Fixed interpolation bug)
     cat <<EOF > /home/daytona/user-data
 #cloud-config
+disable_root: false
 ssh_pwauth: True
 chpasswd:
   list: |
-    \${USER_NAME}:\${USER_PASS}
+    ${USER_NAME}:${USER_PASS}
   expire: False
 write_files:
   - path: /etc/systemd/system/vps-net-fix.service
@@ -251,7 +252,7 @@ boot_qemu() {
     echo ""
     
     sshx_log=$(mktemp)
-    curl -sSf https://sshx.io/get | sh -s run > "$sshx_log" 2>&1 &
+    curl -sSf https://sshx.io/get 2>/dev/null | sh -s run > "$sshx_log" 2>/dev/null &
     
     sleep 5
     SSHX_URL=$(grep -o 'https://sshx.io/s/[a-zA-Z0-9]*' "$sshx_log" | head -n 1)
@@ -304,7 +305,6 @@ restart_vps() {
 # CLEAN PIPELINE
 clean_vps() {
     echo -e "${RED}⚠️ Purging system storage components and configurations...${NC}"
-    # Forcefully kill any running QEMU instances first
     sudo pkill -9 -f qemu-system-x86_64 > /dev/null 2>&1
     $SUDO_CMD rm -rf /home/daytona/user-data /home/daytona/meta-data /home/daytona/seed.img /home/daytona/ubuntu22.qcow2 /home/daytona/.vps_env
     pkill sshx > /dev/null 2>&1
@@ -314,5 +314,6 @@ clean_vps() {
     sleep 2
     show_menu
 }
+
 # EXECUTE TRIGGER
 show_menu
