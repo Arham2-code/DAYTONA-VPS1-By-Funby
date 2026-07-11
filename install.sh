@@ -137,7 +137,7 @@ create_vps() {
     
     loading_bar "Generating Cloud-Init Matrix"
     
-    # Write directly to absolute path architecture
+    # Write configuration blocks inside absolute path structures
     cat <<EOF > /home/daytona/user-data
 #cloud-config
 ssh_pwauth: True
@@ -149,10 +149,11 @@ runcmd:
   - ip link set dev eth0 mtu 1400 || true
   - ip link set dev enp0s3 mtu 1400 || true
   - ip link set dev ens3 mtu 1400 || true
+  - echo "nameserver 8.8.8.8" > /etc/resolv.conf
 EOF
     touch /home/daytona/meta-data
 
-    # 🛠️ ABSOLUTE PATH FAILSAFE ISO BLOCK GENERATION
+    # 🛠️ FAILSAFE ISO COMPILER
     $SUDO_CMD rm -f /home/daytona/seed.img
     if command -v cloud-localds &> /dev/null; then
         $SUDO_CMD cloud-localds /home/daytona/seed.img /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
@@ -164,21 +165,13 @@ EOF
     
     $SUDO_CMD chmod 666 /home/daytona/seed.img > /dev/null 2>&1
 
-    # 🚨 CRITICAL ERROR DIAGNOSTIC CHECK
+    # ERROR DIAGNOSTIC VERIFICATION
     if [ ! -f "/home/daytona/seed.img" ]; then
-        echo -e "${RED}❌ SYSTEM ERROR: Absolute config build failed (/home/daytona/seed.img missing).${NC}"
-        echo -e "${YELLOW}Attempting forced backup compiling...${NC}"
-        $SUDO_CMD apt-get install -y genisoimage > /dev/null 2>&1
-        $SUDO_CMD genisoimage -output /home/daytona/seed.img -volid cidata -joliet -rock /home/daytona/user-data /home/daytona/meta-data > /dev/null 2>&1
-        $SUDO_CMD chmod 666 /home/daytona/seed.img > /dev/null 2>&1
-        
-        if [ ! -f "/home/daytona/seed.img" ]; then
-            echo -e "${RED}❌ FATAL: ISO compiler engine inaccessible inside your sandbox.${NC}"
-            echo -ne "${WHITE}Press Enter to return to menu... ${NC}"
-            read
-            show_menu
-            return
-        fi
+        echo -e "${RED}❌ SYSTEM ERROR: Configuration block build failed (/home/daytona/seed.img missing).${NC}"
+        echo -ne "${WHITE}Press Enter to return to menu... ${NC}"
+        read
+        show_menu
+        return
     fi
 
     loading_bar "Expanding Server Hard Disk Allocation"
@@ -269,7 +262,7 @@ boot_qemu() {
     echo -e "${GREEN}==========================================================${NC}"
     echo ""
     
-    # 🚀 EXECUTING RE-CONFIGURED STRICT ABSOLUTE PATH ARCHITECTURE WITH GOOGLE DNS
+    # 🚀 EXECUTING STRUCTURAL VIRTUAL ENVIRONMENT WITH INTEGRATED INTERNET OVERRIDES
     qemu-system-x86_64 \
         -hda /home/daytona/ubuntu22.qcow2 \
         -m $RAM_VALUE \
