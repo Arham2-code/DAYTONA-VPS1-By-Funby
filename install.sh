@@ -137,6 +137,8 @@ create_vps() {
     fi
     
     loading_bar "Generating Cloud-Init Matrix"
+    
+    # 🔧 FIXED: Added dynamic MTU scaling for virtual interface names inside QEMU
     cat <<EOF > user-data
 #cloud-config
 ssh_pwauth: True
@@ -144,6 +146,10 @@ chpasswd:
   list: |
     ${USER_NAME}:${USER_PASS}
   expire: False
+bootcmd:
+  - ip link set dev eth0 mtu 1400 || true
+  - ip link set dev enp0s3 mtu 1400 || true
+  - ip link set dev ens3 mtu 1400 || true
 EOF
 
     cloud-localds seed.img user-data > /dev/null 2>&1
@@ -242,7 +248,7 @@ boot_qemu() {
         -smp ${CPU_CORES:-4} \
         -drive file=seed.img,format=raw \
         -nographic \
-        -netdev user,id=net0,hostfwd=tcp::${TCP_HOST_PORT}-:${TCP_GUEST_PORT} \
+        -netdev user,id=net0,dns=8.8.8.8,hostfwd=tcp::${TCP_HOST_PORT}-:${TCP_GUEST_PORT} \
         -device e1000,netdev=net0
 }
 
